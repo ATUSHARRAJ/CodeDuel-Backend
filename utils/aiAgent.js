@@ -1,42 +1,80 @@
- 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const generateDriverCodeWithAI = async (language, userCode, testCases) => {
+const generateDriverCodeWithAI = async (language, starterCode, testCases) => {
   const apiKey = process.env.GROQ_API_KEY;
-
   if (!apiKey) throw new Error("Missing GROQ_API_KEY");
 
   const MAX_RETRIES = 3;
-  const RETRY_DELAY_MS = 3000;
   let attempts = 0;
-
-  // ✅ Best Model for Logic
+  
+  // Strongest model for logic
   const MODEL = "llama-3.3-70b-versatile"; 
+
+  const langKey = language.toLowerCase();
+  
+  // Convert starter code to string for context
+  const starterCodeStr = typeof starterCode === 'object' ? JSON.stringify(starterCode) : starterCode;
+
+  // ------------------------------------------------------------------
+  // ⚡ ULTIMATE LANGUAGE RULES (Global Scope Placement)
+  // ------------------------------------------------------------------
+  const LANG_CONFIG = {
+    'cpp': `
+      - **Structure:** 1. Write Headers (#include <iostream>, <vector>, <string>, <algorithm>, <map>, <set>) and 'using namespace std;'.
+        2. **GLOBAL SCOPE:** Write '##USER_CODE_HERE##' outside of any function or class. (Do NOT wrap it in 'class Solution' yourself, the user provides the class).
+        3. **MAIN FUNCTION:** Inside 'int main()', instantiate 'Solution solution;' and run tests.
+      - **Syntax:** Convert JSON arrays directly to C++ initializer lists (e.g., JSON '[1,2]' becomes '{1, 2}').
+    `,
+    'java': `
+      - **Structure:**
+        1. Define 'public class Main {'.
+        2. Inside Main, create 'public static void main(String[] args)'.
+        3. **OUTSIDE Main** (after closing brace of Main), write '##USER_CODE_HERE##'. (This allows the user's 'class Solution' to exist as a sibling class).
+        4. In main(), instantiate 'Solution sol = new Solution();'.
+      - **Syntax:** Use 'new int[]{...}' for arrays and 'Arrays.equals()' for comparison.
+    `,
+    'python': `
+      - **Structure:**
+        1. Write '##USER_CODE_HERE##' at the very top level.
+        2. Write 'if __name__ == "__main__":' block below.
+        3. Instantiate 'sol = Solution()'.
+      - **Syntax:** Convert 'true'->'True', 'false'->'False', 'null'->'None'.
+    `,
+    'javascript': `
+      - **Structure:** 1. Write '##USER_CODE_HERE##' at the top.
+        2. Below it, write the test runner logic.
+        3. Instantiate 'const sol = new Solution();' or call function directly based on starter code context.
+    `
+  };
+
+  const selectedRules = LANG_CONFIG[langKey] || LANG_CONFIG['cpp'];
 
   while (attempts < MAX_RETRIES) {
     try {
       const prompt = `
-        You are a specialized Code Execution Agent.
+        You are a Senior Code Architect.
         
-        **GOAL:** Generate a single, complete source file in ${language} that includes the User's Code and runs it against the Test Cases.
+        **GOAL:** Generate a Driver Code Wrapper for **${language}**.
+        
+        **CRITICAL INSTRUCTION:** - The "User Code" ALREADY contains the Class and Function definitions.
+        - **DO NOT** write 'class Solution' or function signatures yourself.
+        - **DO NOT** wrap the placeholder in another class.
+        - simply place '##USER_CODE_HERE##' at the Global Scope.
 
-        **USER CODE:**
-        ${userCode}
+        **INPUTS:**
+        1. **Starter Code Context:** ${starterCodeStr}
+        2. **Test Cases:** ${JSON.stringify(testCases)}
 
-        **TEST CASES (JSON):**
-        ${JSON.stringify(testCases)}
+        **LANGUAGE SPECIFIC RULES:**
+        ${selectedRules}
 
-        **STRICT RULES:**
-        1. **PRESERVE USER CODE:** You MUST inject the **USER CODE** provided above exactly as is. Do not refactor, change, or remove a single character of the user's logic. Place it before the main function (or appropriate runner).
-        2. **NO PARSING IN CODE:** Do NOT write code that uses 'substr', 'find', or 'stringstream' to parse the inputs at runtime. 
-           - Instead, YOU (the AI) must extract the raw values from the JSON strings now.
-           - Example: If input is "s = \"anagram\", t = \"nagaram\"", you must generate C++ vectors: 
-             \`vector<string> s_vals = {"anagram", ...};\`
-             \`vector<string> t_vals = {"nagaram", ...};\`
-        3. **HANDLE MULTIPLE ARGUMENTS:** If the user function takes multiple arguments (like s and t), create separate vectors for each argument.
-        4. **NO EXTERNAL LIBS:** Use only standard libraries (<iostream>, <vector>, <string>, <algorithm>).
-        5. **NAMESPACE:** For C++, always include 'using namespace std;'.
-        6. **VERDICT ONLY:** Print "Accepted" if all pass. Print "Wrong Answer" and exit(0) if any fail. No debug output.
+        **RUNNER LOGIC (Inside Main/Runner):**
+        - **NO PARSING:** Hardcode the test case values from JSON directly into native variables (vectors, arrays, etc.).
+        - Call the user's function.
+        - Compare output with expected result strictly.
+        - Print "Accepted" if ALL pass.
+        - Print "Wrong Answer" if ANY fail. 
+        - (Optional: Print failure details like "Expected X but got Y").
 
         **OUTPUT:** Raw code only. No markdown.
       `;
@@ -50,7 +88,7 @@ const generateDriverCodeWithAI = async (language, userCode, testCases) => {
         body: JSON.stringify({
           model: MODEL,
           messages: [
-            { role: "system", content: "You are a coding engine. Write only executable code." },
+            { role: "system", content: "You are a coding engine. Output only valid code." },
             { role: "user", content: prompt }
           ],
           temperature: 0.1, 
@@ -64,12 +102,10 @@ const generateDriverCodeWithAI = async (language, userCode, testCases) => {
 
       // Cleanup Markdown
       text = text.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-      console.log(text);
-      // 🛡️ Safety: Ensure Headers & Namespace
-      if (language === "cpp") {
-        if (!text.includes("#include <iostream>")) text = "#include <iostream>\n" + text;
-        if (!text.includes("#include <vector>")) text = "#include <vector>\n" + text;
-        if (!text.includes("using namespace std;")) text = "using namespace std;\n" + text;
+      
+      // 🛡️ Safety: Ensure C++ Headers exist if AI forgets
+      if (langKey === 'cpp' && !text.includes("#include <vector>")) {
+         text = "#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\nusing namespace std;\n\n" + text;
       }
 
       return text;
@@ -77,12 +113,7 @@ const generateDriverCodeWithAI = async (language, userCode, testCases) => {
     } catch (error) {
       attempts++;
       console.error(`Attempt ${attempts} failed: ${error.message}`);
-      
-      if (error.message.includes("429")) {
-        await sleep(RETRY_DELAY_MS);
-      } else {
-        throw error;
-      }
+      await sleep(2000);
     }
   }
   throw new Error("Failed to generate driver code.");

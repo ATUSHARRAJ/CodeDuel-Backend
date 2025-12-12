@@ -1,38 +1,76 @@
 const mongoose = require("mongoose");
 
 const problemStatementSchema = new mongoose.Schema({
-  id: { type: Number, required: true, unique: true },
-  title: { type: String, required: true },
-  difficulty: { type: String, enum: ["Easy", "Medium", "Hard"], required: true },
-  description: { type: String, required: true },
-  
-  // Public Examples (shown to user)
-  examples: [{
-    input: String,
-    output: String,
-    explanation: String
-  }],
-  
-  // Constraints
+  // 1. Basic Info
+  id: { 
+    type: Number, 
+    required: true, 
+    unique: true 
+  },
+  title: { 
+    type: String, 
+    required: true 
+  },
+  difficulty: { 
+    type: String, 
+    enum: ["Easy", "Medium", "Hard"], 
+    default: "Easy" 
+  },
+  topic: { 
+    type: String, 
+    required: true 
+  },
+  description: { 
+    type: String, 
+    required: true 
+  },
+
+  // 2. Data for User & Frontend
+  examples: [
+    {
+      input: String,
+      output: String,
+      explanation: String
+    }
+  ],
   constraints: [String],
   
-  // Starter Code (User sees this)
+  // 3. Test Cases for Backend Logic
+  testCases: [
+    {
+      input: String,
+      expected: String
+    }
+  ],
+
+  // 4. Starter Code (Jo User ko Frontend editor me dikhega)
+  // Ye waisa hi rahega jaisa abhi hai
   starterCode: {
-    type: Map,
-    of: String
+    type: Object, // Example: { cpp: "class Solution...", python: "class Solution..." }
+    required: true
   },
 
-  // Driver Code (For "Run" button - simple check)
-  driverCode: {
-    type: Map,
-    of: String
-  },
+  // ✅ 5. NEW: Driver Code Templates (Jo Backend Piston pe run karega)
+  // Pehle ye Shayad String tha, ab ise Object bana diya hai
+  driverCodeTemplates: {
+    cpp: { 
+        type: String, 
+        default: "" // Default empty string agar generate nahi hua
+    },
+    java: { 
+        type: String, 
+        default: "" 
+    },
+    python: { 
+        type: String, 
+        default: "" 
+    },
+    javascript: { 
+        type: String, 
+        default: "" 
+    }
+  }
 
-  // HIDDEN TEST CASES (For "Submit" button - rigorous check)
-  testCases: [{
-    input: String,
-    expected: String
-  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model("ProblemStatement", problemStatementSchema);
