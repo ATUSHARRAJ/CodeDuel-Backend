@@ -140,9 +140,13 @@ const githubLogin = async (req, res) => {
     return res.json({ success: true, token, user });
 
   } catch (err) {
-    console.error("GitHub Login Error:", err.response?.data || err.message);
+    // 👇 ADD THIS LINE to see the real reason in Render Logs
+    console.log("GITHUB ERROR DETAILS:", err.response?.data); 
+    
+    console.error("GitHub Login Error:", err.message);
     return res.status(500).json({ success: false, message: "GitHub Login Failed" });
-  }
+}
+  
 };
 
 // ==========================================
