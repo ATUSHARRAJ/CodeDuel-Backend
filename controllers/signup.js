@@ -70,8 +70,7 @@ const googleLogin = async (req, res) => {
 // 2. GITHUB LOGIN (With Account Linking)
 // ==========================================
 const githubLogin = async (req, res) => {
-  const { code } = req.body;
-
+  const code = req.query.code;
   try {
     // A. Exchange Code for Access Token
     const tokenRes = await axios.post(
