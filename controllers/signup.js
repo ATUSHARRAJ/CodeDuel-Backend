@@ -145,6 +145,11 @@ const githubLogin = async (req, res) => {
     
     console.error("GitHub Login Error:", err.message);
     return res.status(500).json({ success: false, message: "GitHub Login Failed" });
+    return res.status(500).json({ 
+        success: false, 
+        message: "GitHub Login Failed", 
+        details: err.response?.data // Send details to frontend so you can see it in Inspect Element too
+    });
 }
   
 };
