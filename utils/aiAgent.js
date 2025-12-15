@@ -20,24 +20,26 @@ const generateDriverCodeWithAI = async (language, starterCode, testCases) => {
   // ------------------------------------------------------------------
   const LANG_CONFIG = {
     'cpp': `
-      - **Structure:** 1. Write Headers (#include <iostream>, <vector>, <string>, <algorithm>, <map>, <set>) and 'using namespace std;'.
+      - **Structure:** 1. Write Headers (#include <bits/stdc++.h>,#include <iostream>, <vector>, <string>, <algorithm>, <map>, <set>) and 'using namespace std;'.
         2. **GLOBAL SCOPE:** Write '##USER_CODE_HERE##' outside of any function or class. (Do NOT wrap it in 'class Solution' yourself, the user provides the class).
         3. **MAIN FUNCTION:** Inside 'int main()', instantiate 'Solution solution;' and run tests.
       - **Syntax:** Convert JSON arrays directly to C++ initializer lists (e.g., JSON '[1,2]' becomes '{1, 2}').
     `,
     'java': `
       - **Structure:**
-        1. Define 'public class Main {'.
-        2. Inside Main, create 'public static void main(String[] args)'.
-        3. **OUTSIDE Main** (after closing brace of Main), write '##USER_CODE_HERE##'. (This allows the user's 'class Solution' to exist as a sibling class).
-        4. In main(), instantiate 'Solution sol = new Solution();'.
+        1. always include import java.util.*;
+        2. Define 'public class Main {'.
+        3. Inside Main, create 'public static void main(String[] args)'.
+        4. **OUTSIDE Main** (after closing brace of Main), write '##USER_CODE_HERE##'. (This allows the user's 'class Solution' to exist as a sibling class).
+        5. In main(), instantiate 'Solution sol = new Solution();'.
       - **Syntax:** Use 'new int[]{...}' for arrays and 'Arrays.equals()' for comparison.
     `,
     'python': `
       - **Structure:**
-        1. Write '##USER_CODE_HERE##' at the very top level.
-        2. Write 'if __name__ == "__main__":' block below.
-        3. Instantiate 'sol = Solution()'.
+        1. Always include from typing import * at the top.
+        2. Write '##USER_CODE_HERE##' at the very top level.
+        3. Write 'if __name__ == "__main__":' block below.
+        4. Instantiate 'sol = Solution()'.
       - **Syntax:** Convert 'true'->'True', 'false'->'False', 'null'->'None'.
     `,
     'javascript': `
@@ -102,7 +104,6 @@ const generateDriverCodeWithAI = async (language, starterCode, testCases) => {
 
       // Cleanup Markdown
       text = text.replace(/```[a-z]*\n?/gi, "").replace(/```/g, "").trim();
-      
       // 🛡️ Safety: Ensure C++ Headers exist if AI forgets
       if (langKey === 'cpp' && !text.includes("#include <vector>")) {
          text = "#include <iostream>\n#include <vector>\n#include <string>\n#include <algorithm>\nusing namespace std;\n\n" + text;

@@ -33,16 +33,16 @@ const submitCode = async (req, res) => {
         if (!langKey) return res.status(400).json({ success: false, message: "Unsupported language" });
 
         let template = "";
-        let isNewGenerated = false; // Flag to track if we need to save later
+        let isNewGenerated = false; 
 
-        // 1. Check Cache
+        // 1. Check Cache or Generate
         if (problem.driverCodeTemplates && problem.driverCodeTemplates[langKey]) {
             console.log(`✅ Using Cached Template for ${langKey}`);
             template = problem.driverCodeTemplates[langKey];
         } else {
             console.log(`⚠️ Template missing for ${langKey}. Generating via AI...`);
             template = await generateDriverCodeWithAI(langKey, problem.starterCode, problem.testCases);
-            isNewGenerated = true; // Mark true, but DON'T SAVE YET
+            isNewGenerated = true;
         }
 
         // 2. Prepare Code
@@ -58,29 +58,19 @@ const submitCode = async (req, res) => {
         const response = await axios.post(PISTON_API, payload);
         const result = response.data;
 
-        // ---------------------------------------------------------
-        // 🛑 ERROR HANDLING & SAVING LOGIC
-        // ---------------------------------------------------------
-
-        // Check for Runtime Errors (Segfault, etc.) or Compilation Errors
+        // 🛑 RUNTIME ERROR CHECK
         if (result.run.code !== 0 || result.run.signal) {
             console.log("❌ Execution Failed. Template will NOT be saved.");
-            // Agar template naya tha aur fail hua, toh hum usse save nahi karenge.
-            // Taaki agli baar AI dubara fresh try kare.
-            
             return res.json({ 
                 success: false, 
                 status: "Runtime/Compilation Error", 
-                output: result.run.stderr || result.run.stdout,
-                debug: "Code execution failed, so template was not cached."
+                output: result.run.stderr || result.run.stdout
             });
         }
 
-        // ✅ SUCCESS CASE: Code ran successfully (Exit Code 0)
-        // Ab hum template save kar sakte hain agar wo naya tha
+        // ✅ SAVE TEMPLATE IF NEW & SUCCESSFUL
         if (isNewGenerated) {
             if (!problem.driverCodeTemplates) problem.driverCodeTemplates = {};
-            
             problem.driverCodeTemplates[langKey] = template;
             problem.markModified('driverCodeTemplates');
             await problem.save();
@@ -89,26 +79,61 @@ const submitCode = async (req, res) => {
 
         const output = result.run.output ? result.run.output.trim() : "";
 
-        // 4. Final Verdict
+        // 4. FINAL VERDICT & DB UPDATE
         if (output.includes("Accepted")) {
-            // ... (Save SolvedProblem Logic Same as Before) ...
             
-            const existingSolution = await SolvedProblem.findOne({ user: userId, problemId: problemId });
-            if (existingSolution) {
-                existingSolution.code = userCode;
-                existingSolution.language = language;
-                await existingSolution.save();
-                return res.json({ success: true, status: "Accepted", output: "All Test Cases Passed! (Updated)" });
+            // --- UPDATED LOGIC START ---
+            let pointsAwarded = 0;
+            let statusMessage = "Accepted";
+
+            // A. Find User's Progress Doc
+            let progress = await SolvedProblem.findOne({ user: userId });
+
+            if (!progress) {
+                // Case 1: First time solving ANY problem -> Create Doc
+                progress = await SolvedProblem.create({
+                    user: userId,
+                    problems: [{ problemId: Number(problemId), code: userCode, language }]
+                });
+                pointsAwarded = 10;
+                statusMessage = "All Test Cases Passed! (+10 Points)";
             } else {
-                await SolvedProblem.create({ user: userId, problemId: Number(problemId), language: language, code: userCode });
+                // Case 2: Doc exists -> Check if THIS problem is in array
+                const existingIndex = progress.problems.findIndex(p => p.problemId === Number(problemId));
+
+                if (existingIndex > -1) {
+                    // Update existing solution (No Points)
+                    progress.problems[existingIndex].code = userCode;
+                    progress.problems[existingIndex].language = language;
+                    progress.problems[existingIndex].solvedAt = Date.now();
+                    statusMessage = "Solution Updated (Already Solved)";
+                } else {
+                    // Add new solution (Award Points)
+                    progress.problems.push({ problemId: Number(problemId), code: userCode, language });
+                    pointsAwarded = 10;
+                    statusMessage = "All Test Cases Passed! (+10 Points)";
+                }
+                await progress.save();
+            }
+
+            // B. Update Profile Stats (Only if points awarded)
+            if (pointsAwarded > 0) {
                 const profile = await ProfileDetails.findOne({ user: userId });
                 if (profile) {
                     profile.stats.questionsSolved += 1;
-                    profile.stats.points += 10;
+                    profile.stats.points += pointsAwarded;
                     await profile.save();
                 }
-                return res.json({ success: true, status: "Accepted", output: "All Test Cases Passed!", points: 10 });
             }
+            // --- UPDATED LOGIC END ---
+
+            return res.json({ 
+                success: true, 
+                status: "Accepted", 
+                output: statusMessage, 
+                pointsAwarded 
+            });
+
         } else {
             return res.json({ success: false, status: "Wrong Answer", output: output });
         }

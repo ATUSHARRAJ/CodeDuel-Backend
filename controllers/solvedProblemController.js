@@ -6,12 +6,24 @@ const SolvedProblem = require('../models/solvedProblemModel');
 const getMySolvedProblems = async (req, res) => {
   try {
     const userId = req.user.id;
+    
+    // 1. Find the ONE document for this user that holds the array of solutions
+    const userProgress = await SolvedProblem.findOne({ user: userId });
 
-    // Fetch all records for this user
-    // .select() picks only the fields we need to keep the response light
-    const solvedList = await SolvedProblem.find({ user: userId })
-      .select('problemId language solvedAt code -_id'); // Include 'code' if you want to show it later
+    // 2. If the user has never solved a problem, return an empty list (Success)
+    if (!userProgress) {
+        return res.status(200).json({
+            success: true,
+            count: 0,
+            data: [] 
+        });
+    }
 
+    // 3. Extract the 'problems' array from the document
+    // This array contains objects like: { problemId: 1, code: "...", language: "cpp", ... }
+    const solvedList = userProgress.problems;
+
+    // 4. Send the array to the frontend
     res.status(200).json({
       success: true,
       count: solvedList.length,
