@@ -6,8 +6,10 @@ const { getAllProblems } = require('../controllers/problemController');
  const { getMySolvedProblems } = require('../controllers/solvedProblemController');
 const { protect } = require('../middleware/authMiddleware');
 const { googleLogin, githubLogin, login , register} = require("../controllers/signup");
+const { githubCallback } = require("../controllers/githubCallbackController");
 // Define the GET route
 router.post("/auth/google-login", googleLogin);
+router.post("/auth/github-login", githubLogin);
 router.get("/auth/github/callback", githubLogin);
 router.post("/auth/login", login);
 router.post("/auth/register", register);
