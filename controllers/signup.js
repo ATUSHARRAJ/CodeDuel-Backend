@@ -16,7 +16,7 @@ const generateToken = (id) => {
 // ==========================================
 const googleLogin = async (req, res) => {
   try {
-    const { token } = req.body;
+    const { code } = req.body;
 
     // A. Verify Token with Google
     const ticket = await client.verifyIdToken({
