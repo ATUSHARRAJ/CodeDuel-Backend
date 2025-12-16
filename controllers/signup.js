@@ -83,7 +83,6 @@ const googleLogin = async (req, res) => {
 const githubLogin = async (req, res) => {
   try {
     const { code } = req.body;
-    console.log("Received GitHub code:", code);
 
     if (!code) {
       return res.status(400).json({
